@@ -33,12 +33,29 @@ LCM_DSI_MODE_CON lcm_dsi_mode;
 #define LCD_DEBUG(fmt, args...)  pr_debug("[KERNEL/LCM]"fmt, ##args)
 #endif
 
+
+/*** add st7701 ****/
+extern LCM_DRIVER st7701_lcm_drv;
+/****************/
+extern LCM_DRIVER nv3049f_28_lcm_drv;
+
 extern LCM_DRIVER st7703_hd720_dsi_vdo_boe_lcm_drv;
 extern LCM_DRIVER nt35521_hd720_dsi_vdo_cmi_tps65132_lcm_drv;
 extern LCM_DRIVER rm68200_hd720_dsi_vdo_ivo_lcm_drv; //640x1280
 extern LCM_DRIVER ili9881d_hd720_dsi_vdo_ivo_lcm_drv; //640x1280
-extern LCM_DRIVER ft8613_hd720_dsi_vdo_xld_lcm_drv; 
+extern LCM_DRIVER ft8613_hd720_dsi_vdo_xld_lcm_drv;
 LCM_DRIVER *lcm_driver_list[] = {
+// add st7701_st_28 *****************************
+#if defined(ST7701_ST_28)
+	&st7701_lcm_drv,
+#endif
+//******//
+#if defined(NV3049F_28)
+	&nv3049f_28_lcm_drv,
+#endif
+/************/
+
+
 #if defined(NT35521_HD720_DSI_VDO_CMI_TPS65132)
 	&nt35521_hd720_dsi_vdo_cmi_tps65132_lcm_drv,
 #endif
@@ -1070,6 +1087,10 @@ LCM_DRIVER *lcm_driver_list[] = {
 unsigned char lcm_name_list[][128] = {
 #if defined(HX8392A_DSI_CMD)
 	"hx8392a_dsi_cmd",
+#endif
+
+#if defined(ST7701)
+	"st7701",
 #endif
 
 #if defined(S6E3HA3_WQHD_2K_CMD)

@@ -1,3 +1,4 @@
+HOSTCFLAGS += -fcommon
 # scripts/dtc makefile
 
 hostprogs-y	:= dtc

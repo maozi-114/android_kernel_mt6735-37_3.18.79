@@ -73,7 +73,7 @@ class AdcObj(ModuleObj):
 
         # sort by the key, or the sequence is dissorted
         #sorted_list = sorted(ModuleObj.get_data(self).keys())
-        for key in sorted_key(ModuleObj.get_data(self).keys()):
+        for key in sorted_key(list(ModuleObj.get_data(self).keys())):
             value = ModuleObj.get_data(self)[key]
 
             if value == "TEMPERATURE":

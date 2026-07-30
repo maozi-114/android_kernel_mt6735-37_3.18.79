@@ -15,14 +15,14 @@
 import re
 import string
 import xml.dom.minidom
-import ConfigParser
+import configparser
 
-from ModuleObj import ModuleObj
+from .ModuleObj import ModuleObj
 #from utility import util
 from utility.util import sorted_key
 from data.I2cData import I2cData
 from data.I2cData import BusData
-import ChipObj
+from . import ChipObj
 
 class I2cObj(ModuleObj):
     _busList = []
@@ -33,7 +33,7 @@ class I2cObj(ModuleObj):
         #self.__bBusEnable = True
 
     def get_cfgInfo(self):
-        cp = ConfigParser.ConfigParser(allow_no_value=True)
+        cp = configparser.ConfigParser(allow_no_value=True)
         cp.read(ModuleObj.get_figPath())
 
         I2cData._i2c_count = string.atoi(cp.get('I2C', 'I2C_COUNT'))
@@ -103,7 +103,7 @@ class I2cObj(ModuleObj):
         gen_str += '''\n'''
 
         #sorted_lst = sorted(ModuleObj.get_data(self).keys(), key=compare)
-        for key in sorted_key(ModuleObj.get_data(self).keys()):
+        for key in sorted_key(list(ModuleObj.get_data(self).keys())):
             value = ModuleObj.get_data(self)[key]
             temp = ''
             if value.get_address().strip() == '':
@@ -137,7 +137,7 @@ class I2cObj(ModuleObj):
                     temp_str = 'use-push-pull'
                 gen_str += '''\tmediatek,%s;\n''' %(temp_str)
 
-            for key in sorted_key(ModuleObj.get_data(self).keys()):
+            for key in sorted_key(list(ModuleObj.get_data(self).keys())):
                 value = ModuleObj.get_data(self)[key]
                 channel = 'I2C_CHANNEL_%d' %(i)
                 if cmp(value.get_channel(), channel) == 0 and cmp(value.get_varName(), 'NC') != 0 and value.get_address().strip() != '':
@@ -184,7 +184,7 @@ class I2cObj_MT6759(I2cObj):
                     temp_str = 'use-push-pull'
                 gen_str += '''\tmediatek,%s;\n''' %(temp_str)
 
-            for key in sorted_key(ModuleObj.get_data(self).keys()):
+            for key in sorted_key(list(ModuleObj.get_data(self).keys())):
                 value = ModuleObj.get_data(self)[key]
                 channel = 'I2C_CHANNEL_%d' %(i)
                 if cmp(value.get_channel(), channel) == 0 and cmp(value.get_varName(), 'NC') != 0 and value.get_address().strip() != '':
