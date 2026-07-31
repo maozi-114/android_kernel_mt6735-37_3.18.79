@@ -261,5 +261,6 @@ config TOUCHSCREEN_MTK_GSLX68X
 	  To compile this dirver as a module, choose M here: the
 	  module will be called.
 
-source "drivers/input/touchscreen/mediatek/gslx68x/Kconfig" 
+source "drivers/input/touchscreen/mediatek/gslx68x/Kconfig"
+source "drivers/input/touchscreen/mediatek/cst836u/Kconfig"
 endif

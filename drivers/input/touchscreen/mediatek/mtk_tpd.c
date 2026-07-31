@@ -542,8 +542,11 @@ static int tpd_probe(struct platform_device *pdev)
 	for (i = 1; i < TP_DRV_MAX_COUNT; i++) {
 		/* add tpd driver into list */
 		if (tpd_driver_list[i].tpd_device_name != NULL) {
+			pr_err("[touch] tpd_probe try slot=%d name=%s\n", i,
+			       tpd_driver_list[i].tpd_device_name);
 			tpd_driver_list[i].tpd_local_init();
-			/* msleep(1); */
+			pr_err("[touch] tpd_probe result slot=%d status=%d\n", i,
+			       tpd_load_status);
 			if (tpd_load_status == 1) {
 				TPD_DMESG("[mtk-tpd]tpd_probe, tpd_driver_name=%s\n",
 					  tpd_driver_list[i].tpd_device_name);
@@ -625,8 +628,12 @@ static int tpd_remove(struct platform_device *pdev)
 /* called when loaded into kernel */
 static void tpd_init_work_callback(struct work_struct *work)
 {
-	TPD_DEBUG("MediaTek touch panel driver init\n");
-	if (platform_driver_register(&tpd_driver) != 0)
+	int ret;
+
+	pr_err("[touch] tpd_init_work enter\n");
+	ret = platform_driver_register(&tpd_driver);
+	pr_err("[touch] platform_driver_register ret=%d\n", ret);
+	if (ret != 0)
 		TPD_DMESG("unable to register touch panel driver.\n");
 }
 /* Add driver: if find TPD_TYPE_CAPACITIVE driver successfully, loading it */
@@ -634,6 +641,8 @@ int tpd_driver_add(struct tpd_driver_t *tpd_drv)
 {
 	int i;
 
+	pr_err("[touch] tpd_driver_add name=%s\n",
+	       tpd_drv ? tpd_drv->tpd_device_name : "<null>");
 	if (g_tpd_drv != NULL) {
 		TPD_DMESG("touch driver exist\n");
 		return -1;
@@ -654,6 +663,8 @@ int tpd_driver_add(struct tpd_driver_t *tpd_drv)
 	for (i = 1; i < TP_DRV_MAX_COUNT; i++) {
 		/* add tpd driver into list */
 		if (tpd_driver_list[i].tpd_device_name == NULL) {
+			pr_err("[touch] tpd_driver_add slot=%d name=%s\n",
+			       i, tpd_drv->tpd_device_name);
 			tpd_driver_list[i].tpd_device_name = tpd_drv->tpd_device_name;
 			tpd_driver_list[i].tpd_local_init = tpd_drv->tpd_local_init;
 			tpd_driver_list[i].suspend = tpd_drv->suspend;
