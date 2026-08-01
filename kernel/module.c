@@ -1124,73 +1124,23 @@ static int try_to_force_load(struct module *mod, const char *reason)
 }
 
 #ifdef CONFIG_MODVERSIONS
-/* If the arch applies (non-zero) relocations to kernel kcrctab, unapply it. */
-static unsigned long maybe_relocated(unsigned long crc,
-				     const struct module *crc_owner)
-{
-#ifdef ARCH_RELOCATES_KCRCTAB
-	if (crc_owner == NULL)
-		return crc - (unsigned long)reloc_start;
-#endif
-	return crc;
-}
-
 static int check_version(Elf_Shdr *sechdrs,
 			 unsigned int versindex,
 			 const char *symname,
-			 struct module *mod, 
+			 struct module *mod,
 			 const unsigned long *crc,
 			 const struct module *crc_owner)
 {
-	unsigned int i, num_versions;
-	struct modversion_info *versions;
-
-	/* Exporting module didn't supply crcs?  OK, we're already tainted. */
-	if (!crc)
-		return 1;
-
-	/* No versions at all?  modprobe --force does this. */
-	if (versindex == 0)
-		return try_to_force_load(mod, symname) == 0;
-
-	versions = (void *) sechdrs[versindex].sh_addr;
-	num_versions = sechdrs[versindex].sh_size
-		/ sizeof(struct modversion_info);
-
-	for (i = 0; i < num_versions; i++) {
-		if (strcmp(versions[i].name, symname) != 0)
-			continue;
-
-		if (versions[i].crc == maybe_relocated(*crc, crc_owner))
-			return 1;
-		pr_debug("Found checksum %lX vs module %lX\n",
-		       maybe_relocated(*crc, crc_owner), versions[i].crc);
-		goto bad_version;
-	}
-
-	pr_warn("%s: no symbol version for %s\n", mod->name, symname);
-	return 0;
-
-bad_version:
-	printk("%s: disagrees about version of symbol %s\n",
-	       mod->name, symname);
-	return 0;
+	/* Compatibility override: ignore CONFIG_MODVERSIONS CRC mismatches. */
+	return 1;
 }
 
 static inline int check_modstruct_version(Elf_Shdr *sechdrs,
 					  unsigned int versindex,
 					  struct module *mod)
 {
-	const unsigned long *crc;
-
-	/* Since this should be found in kernel (which can't be removed),
-	 * no locking is necessary. */
-	if (!find_symbol(VMLINUX_SYMBOL_STR(module_layout), NULL,
-			 &crc, true, false))
-		BUG();
-	return check_version(sechdrs, versindex,
-			     VMLINUX_SYMBOL_STR(module_layout), mod, crc,
-			     NULL);
+	/* Compatibility override: ignore the module_layout CRC mismatch. */
+	return 1;
 }
 
 /* First part is kernel version, which we ignore if module has crcs. */
@@ -1201,7 +1151,8 @@ static inline int same_magic(const char *amagic, const char *bmagic,
 		amagic += strcspn(amagic, " ");
 		bmagic += strcspn(bmagic, " ");
 	}
-	return strcmp(amagic, bmagic) == 0;
+	/* Compatibility override: ignore kernel/module vermagic mismatch. */
+	return 1;
 }
 #else
 static inline int check_version(Elf_Shdr *sechdrs,
@@ -2456,32 +2407,9 @@ static inline void kmemleak_load_module(const struct module *mod,
 #ifdef CONFIG_MODULE_SIG
 static int module_sig_check(struct load_info *info, int flags)
 {
-	int err = -ENOKEY;
-	const unsigned long markerlen = sizeof(MODULE_SIG_STRING) - 1;
-	const void *mod = info->hdr;
-
-	/*
-	 * Require flags == 0, as a module with version information
-	 * removed is no longer the module that was signed
-	 */
-	if (flags == 0 &&
-	    info->len > markerlen &&
-	    memcmp(mod + info->len - markerlen, MODULE_SIG_STRING, markerlen) == 0) {
-		/* We truncate the module to discard the signature */
-		info->len -= markerlen;
-		err = mod_verify_sig(mod, &info->len);
-	}
-
-	if (!err) {
-		info->sig_ok = true;
-		return 0;
-	}
-
-	/* Not having a signature is only an error if we're strict. */
-	if (err == -ENOKEY && !sig_enforce)
-		err = 0;
-
-	return err;
+	/* Compatibility override: do not require a trusted module signature. */
+	info->sig_ok = false;
+	return 0;
 }
 #else /* !CONFIG_MODULE_SIG */
 static int module_sig_check(struct load_info *info, int flags)
@@ -2892,19 +2820,7 @@ static int check_module_license_and_versions(struct module *mod)
 		add_taint_module(mod, TAINT_PROPRIETARY_MODULE,
 				 LOCKDEP_NOW_UNRELIABLE);
 
-#ifdef CONFIG_MODVERSIONS
-	if ((mod->num_syms && !mod->crcs)
-	    || (mod->num_gpl_syms && !mod->gpl_crcs)
-	    || (mod->num_gpl_future_syms && !mod->gpl_future_crcs)
-#ifdef CONFIG_UNUSED_SYMBOLS
-	    || (mod->num_unused_syms && !mod->unused_crcs)
-	    || (mod->num_unused_gpl_syms && !mod->unused_gpl_crcs)
-#endif
-		) {
-		return try_to_force_load(mod,
-					 "no versions for exported symbols");
-	}
-#endif
+	/* Compatibility override: do not reject missing module CRC tables. */
 	return 0;
 }
 

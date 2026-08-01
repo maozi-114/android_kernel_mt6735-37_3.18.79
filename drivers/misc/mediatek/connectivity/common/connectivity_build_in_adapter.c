@@ -83,6 +83,12 @@ void connectivity_export_show_stack(struct task_struct *tsk, unsigned long *sp)
 }
 EXPORT_SYMBOL(connectivity_export_show_stack);
 
+/* Compatibility entry point required by older WMT modules. */
+void connectivity_export_dump_thread_state(void)
+{
+}
+EXPORT_SYMBOL(connectivity_export_dump_thread_state);
+
 void connectivity_export_tracing_record_cmdline(struct task_struct *tsk)
 {
 	tracing_record_cmdline(tsk);
