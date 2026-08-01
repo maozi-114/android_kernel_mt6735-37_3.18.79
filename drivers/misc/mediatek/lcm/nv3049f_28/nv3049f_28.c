@@ -265,12 +265,9 @@ static void lcm_get_params(LCM_PARAMS *params)
 	params->dsi.horizontal_active_pixel = FRAME_WIDTH;
 	params->dsi.PLL_CLOCK = 150;
 
-	/*
-	 * Direct raw writes not yet named against the exact target lcm_drv.h ABI:
-	 * params+0x2A0 = 1; params+0x348 = 1.
-	 * They intentionally remain unset instead of mapping them to possibly
-	 * incorrect members of a similar, but non-identical, header.
-	 */
+	/* Exact binary writes at LCM_PARAMS+0x2A0 and +0x348. */
+	params->dsi.ssc_disable = 1;
+	params->dsi.lcm_ext_te_enable = 1;
 }
 
 static void lcm_init(void)
