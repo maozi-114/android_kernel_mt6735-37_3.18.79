@@ -60,7 +60,7 @@ static int __init checkreqprot_setup(char *str)
 }
 __setup("checkreqprot=", checkreqprot_setup);
 
-static DEFINE_MUTEX(sel_mutex);
+DEFINE_MUTEX(sel_mutex);
 
 /* global data for booleans */
 static struct dentry *bool_dir;
@@ -263,7 +263,7 @@ static int sel_mmap_handle_status(struct file *filp,
 			       size, vma->vm_page_prot);
 }
 
-static const struct file_operations sel_handle_status_ops = {
+const struct file_operations sel_handle_status_ops = {
 	.open		= sel_open_handle_status,
 	.read		= sel_read_handle_status,
 	.mmap		= sel_mmap_handle_status,
@@ -662,7 +662,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size);
 static ssize_t sel_write_user(struct file *file, char *buf, size_t size);
 static ssize_t sel_write_member(struct file *file, char *buf, size_t size);
 
-static ssize_t (*write_op[])(struct file *, char *, size_t) = {
+ssize_t (*write_op[])(struct file *, char *, size_t) = {
 	[SEL_ACCESS] = sel_write_access,
 	[SEL_CREATE] = sel_write_create,
 	[SEL_RELABEL] = sel_write_relabel,
