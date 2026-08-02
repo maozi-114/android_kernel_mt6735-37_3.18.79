@@ -315,7 +315,7 @@ static const char *const bpf_jmp_string[] = {
 	[BPF_EXIT >> 4] = "exit",
 };
 
-static void print_bpf_insn(const struct bpf_verifier_env *env,
+static void print_bpf_insn(const struct verifier_env *env,
 			   const struct bpf_insn *insn)
 {
 	u8 class = BPF_CLASS(insn->code);
@@ -388,7 +388,7 @@ static void print_bpf_insn(const struct bpf_verifier_env *env,
 			u64 imm = ((u64)(insn + 1)->imm << 32) | (u32)insn->imm;
 			bool map_ptr = insn->src_reg == BPF_PSEUDO_MAP_FD;
 
-			if (map_ptr && !env->allow_ptr_leaks)
+			if (map_ptr)
 				imm = 0;
 
 			verbose("(%02x) r%d = 0x%llx\n", insn->code,
