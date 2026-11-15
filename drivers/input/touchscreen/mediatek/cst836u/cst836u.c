@@ -153,9 +153,9 @@ static void cst836u_report(void)
 		/*
 		 * The original driver sends an unambiguous single touch below its
 		 * display area to tpd_button(). The supplied DTB defines all three
-		 * keys at y=883; its normal display is 480x640.
+		 * keys at y=883; the display area is described by tpd-resolution.
 		 */
-		if (tpd_dts_data.use_tpd_button && count == 1 && y > 800) {
+		if (tpd_dts_data.use_tpd_button && count == 1 && y >= tpd_dts_data.tpd_resolution[1]) {
 			tpd_button(x, y, down);
 			cst836u->button_down = down;
 			report_button = true;
@@ -171,7 +171,7 @@ static void cst836u_report(void)
 		input_report_abs(tpd->dev, ABS_MT_POSITION_Y, y);
 		/* Original 0x406F2BE4 reports logical pressure 1, not p[4]. */
 		input_report_abs(tpd->dev, ABS_MT_PRESSURE, 1);
-		input_report_abs(tpd->dev, ABS_MT_TOUCH_MAJOR, p[5] >> 4);
+		input_report_abs(tpd->dev, ABS_MT_TOUCH_MAJOR, 1);
 		reported |= BIT(id);
 	}
 

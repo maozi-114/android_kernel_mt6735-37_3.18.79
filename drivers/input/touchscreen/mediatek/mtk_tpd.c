@@ -35,6 +35,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/fb.h>
+#include <linux/input/mt.h>
 
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
@@ -44,7 +45,6 @@
 	|| defined(CONFIG_MTK_S3320_47) || defined(CONFIG_MTK_MIT200) \
 	|| defined(CONFIG_TOUCHSCREEN_SYNAPTICS_S3528) || defined(CONFIG_MTK_S7020) \
 	|| defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50)
-#include <linux/input/mt.h>
 #endif /* CONFIG_MTK_S3320 */
 /* for magnify velocity******************************************** */
 #define TOUCH_IOC_MAGIC 'A'
@@ -602,7 +602,7 @@ static int tpd_probe(struct platform_device *pdev)
 	input_abs_set_res(tpd->dev, ABS_X, TPD_RES_X);
 	input_abs_set_res(tpd->dev, ABS_Y, TPD_RES_Y);
 	input_set_abs_params(tpd->dev, ABS_PRESSURE, 0, 255, 0, 0);
-	input_set_abs_params(tpd->dev, ABS_MT_TRACKING_ID, 0, 10, 0, 0);
+	input_set_abs_params(tpd->dev, ABS_MT_TRACKING_ID, 0, TRKID_MAX, 0, 0);
 
 	if (input_register_device(tpd->dev))
 		TPD_DMESG("input_register_device failed.(tpd)\n");

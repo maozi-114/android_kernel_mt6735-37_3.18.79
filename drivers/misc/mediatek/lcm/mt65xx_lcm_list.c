@@ -38,6 +38,8 @@ LCM_DSI_MODE_CON lcm_dsi_mode;
 extern LCM_DRIVER st7701_lcm_drv;
 /****************/
 extern LCM_DRIVER nv3049f_28_lcm_drv;
+extern LCM_DRIVER st7796s_hvga_dsi_cmd_lcm_drv;
+extern LCM_DRIVER st7701s_fw_dsi_vdo_boe_lcm_drv;
 
 extern LCM_DRIVER st7703_hd720_dsi_vdo_boe_lcm_drv;
 extern LCM_DRIVER nt35521_hd720_dsi_vdo_cmi_tps65132_lcm_drv;
@@ -56,8 +58,10 @@ LCM_DRIVER *lcm_driver_list[] = {
 #if defined(NV3049F_28)
 	&nv3049f_28_lcm_drv,
 #endif
-/************/
-
+#if defined(ST7701S_FW_DSI_VDO_BOE)
+	&st7701s_fw_dsi_vdo_boe_lcm_drv,
+#endif
+//forword//
 
 #if defined(NT35521_HD720_DSI_VDO_CMI_TPS65132)
 	&nt35521_hd720_dsi_vdo_cmi_tps65132_lcm_drv,
