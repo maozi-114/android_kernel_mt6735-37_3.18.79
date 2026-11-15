@@ -45,6 +45,9 @@ extern LCM_DRIVER rm68200_hd720_dsi_vdo_ivo_lcm_drv; //640x1280
 extern LCM_DRIVER ili9881d_hd720_dsi_vdo_ivo_lcm_drv; //640x1280
 extern LCM_DRIVER ft8613_hd720_dsi_vdo_xld_lcm_drv;
 LCM_DRIVER *lcm_driver_list[] = {
+#if defined(ST7796S_HVGA_DSI_CMD)
+	&st7796s_hvga_dsi_cmd_lcm_drv,
+#endif
 // add st7701_st_28 *****************************
 #if defined(ST7701_ST_28)
 	&st7701_lcm_drv,

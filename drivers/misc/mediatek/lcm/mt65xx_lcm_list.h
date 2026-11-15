@@ -16,6 +16,8 @@
 
 #include <lcm_drv.h>
 
+extern LCM_DRIVER st7796s_hvga_dsi_cmd_lcm_drv;
+
 extern LCM_DRIVER otm1282a_hd720_dsi_vdo_60hz_lcm_drv;
 
 /*******************/

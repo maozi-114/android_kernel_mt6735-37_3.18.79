@@ -1,4 +1,4 @@
 ls -la ./out/arch/arm64/boot/Image.gz
-cp ./out/arch/arm64/boot/Image.gz /mnt/c/Users/Administrator/Desktop/maozi/tool/aik/aik-pa03_boot/magiskboot/kernel
-cd /mnt/c/Users/Administrator/Desktop/maozi/tool/aik/aik-pa03_boot/magiskboot && magiskboot repack -n boot.img st7701.img
-ls -la st7701.img
+cp ./out/arch/arm64/boot/Image.gz /mnt/c/Users/123/Desktop/yx/port/kernel
+cd /mnt/c/Users/123/Desktop/yx/port && magiskboot repack -n twrp_st7701s.img yx.img
+ls -la yx.img

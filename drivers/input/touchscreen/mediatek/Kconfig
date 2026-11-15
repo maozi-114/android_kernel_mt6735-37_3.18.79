@@ -264,3 +264,13 @@ config TOUCHSCREEN_MTK_GSLX68X
 source "drivers/input/touchscreen/mediatek/gslx68x/Kconfig"
 source "drivers/input/touchscreen/mediatek/cst836u/Kconfig"
 endif
+
+config TOUCHSCREEN_FT6X36_READBACK
+	bool "Readback-derived FT6x36 normal touch driver"
+	depends on I2C && OF
+	default n
+	help
+	  Experimental reconstruction from the original readback kernel.
+	  Requires explicit fts6x36 I2C binding or the new opt-in compatible
+	  reconstructed,ft6x36-readback. No automatic firmware programming.
+	  Keep disabled until board address and binding are verified.
