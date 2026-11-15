@@ -30,6 +30,10 @@ static dma_addr_t tx_dma;
 static bool tx_dma_coherent;
 static bool shadow_valid;
 static struct spi_device *hw_spi;
+static unsigned char *control_cmd;
+static unsigned char *control_data;
+static dma_addr_t control_cmd_dma;
+static dma_addr_t control_data_dma;
 static bool hw_attempted;
 static void refresh(struct work_struct *work);
 static DECLARE_DELAYED_WORK(refresh_work, refresh);
@@ -98,6 +102,25 @@ static void try_hw_spi(void)
 		pr_warn("st7796s-spi: SPI0 device create failed, GPIO fallback\n");
 		return;
 	}
+	/* DMA is also selected for the MTK controller's small transfers. Never
+	 * give it stack or kmalloc addresses: the old driver requires 4-byte
+	 * aligned DMA buffers, and the command path otherwise produces the
+	 * unaligned Tx_DMA warnings seen on the target. */
+	control_cmd = dma_alloc_coherent(&hw_spi->dev, 4, &control_cmd_dma, GFP_KERNEL);
+	control_data = dma_alloc_coherent(&hw_spi->dev, 4, &control_data_dma, GFP_KERNEL);
+	if (!control_cmd || !control_data) {
+		pr_warn("st7796s-spi: control DMA buffer unavailable, GPIO fallback\n");
+		if (control_cmd)
+			dma_free_coherent(&hw_spi->dev, 4, control_cmd, control_cmd_dma);
+		if (control_data)
+			dma_free_coherent(&hw_spi->dev, 4, control_data, control_data_dma);
+		control_cmd = NULL;
+		control_data = NULL;
+		spi_unregister_device(hw_spi);
+		hw_spi = NULL;
+		kfree(conf);
+		return;
+	}
 	mt_set_gpio_mode(PIN(65), 1);
 	mt_set_gpio_mode(PIN(66), 1);
 	mt_set_gpio_mode(PIN(68), 1);
@@ -162,14 +185,16 @@ void st7796s_spi_write(unsigned int cmd, unsigned int count,
 	int ret;
 
 	if (hw_spi) {
-		{
-			u8 command = (u8)cmd;
-			out(67, 0);
-			ret = spi_write(hw_spi, &command, 1);
-		}
+		if (count > 4)
+			count = 4;
+		control_cmd[0] = (u8)cmd;
+		if (count)
+			memcpy(control_data, data, count);
+		out(67, 0);
+		ret = spi_write(hw_spi, control_cmd, 1);
 		out(67, 1);
 		if (!ret && count)
-			ret = spi_write(hw_spi, data, count);
+			ret = spi_write(hw_spi, control_data, count);
 		if (ret)
 			pr_warn_ratelimited("st7796s-spi: command transfer failed %d\n", ret);
 		return;
@@ -332,9 +357,9 @@ static void refresh(struct work_struct *work)
 	st7796s_spi_write(0x2a, sizeof(window), window);
 	st7796s_spi_write(0x2b, sizeof(rows), rows);
 	if (hw_spi) {
-		unsigned char gram = 0x2c;
+		control_cmd[0] = 0x2c;
 		out(67, 0);
-		if (spi_write(hw_spi, &gram, 1))
+		if (spi_write(hw_spi, control_cmd, 1))
 			pr_warn_ratelimited("st7796s-spi: GRAM command failed\n");
 		out(67, 1);
 	} else {
