@@ -246,7 +246,9 @@
 	};
 };
 &touch {
-	tpd-resolution = <720 1280>;
+	interrupt-parent = <&eintc>;
+	interrupts = <10 IRQ_TYPE_EDGE_FALLING>;
+	tpd-resolution = <240 320>;
 	use-tpd-button = <0>;
 	tpd-key-num = <3>;
 	tpd-key-local= <139 172 158 0>;
@@ -771,5 +773,35 @@
 
 /* add by jst for runyee debug end */
 #include <k37mv1_64_yuxin/cust.dtsi>
+
+&eintc {
+	MD1_SIM1_HOT_PLUG_EINT@0 {
+		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+	};
+	/delete-node/ MD1_SIM2_HOT_PLUG_EINT@1;
+};
+
+&keypad {
+	mediatek,kpd-hw-init-map = <114 48 0 0 0 0 0 0 0
+		158 103 28 0 0 0 0 0 0
+		253 0 108 0 0 0 0 0 0
+		0 0 0 0 0 0 0 0 0
+		0 0 0 0 0 0 0 0 0
+		0 0 0 0 0 0 0 0 0
+		0 0 0 0 0 0 0 0 0
+		0 0 0 0 0 0 0 0 0>;
+};
+
+/delete-node/ &cap_touch_mtk;
+
+&i2c1 {
+	touchscreen@38 {
+		compatible = "reconstructed,ft6x36-readback";
+		reg = <0x38>;
+		touchscreen-size-x = <240>;
+		touchscreen-size-y = <320>;
+		mediatek,back-key-coordinate = <120 400>;
+	};
+};
 /*End of this file, DO NOT ADD ANYTHING HERE*/
 

@@ -1,0 +1,52 @@
+--- a/connectivity-modules/connectivity/common/common_detect/Makefile
++++ b/connectivity-modules/connectivity/common/common_detect/Makefile
+@@ -2,6 +2,7 @@
+ subdir-ccflags-y += -DWMT_PLAT_ALPS=1
+ subdir-ccflags-y += -DMTK_WCN_REMOVE_KERNEL_MODULE
+ # The external build has no CONFIG_MTK_COMBO_CHIP value; this board uses WLAN Gen2.
++subdir-ccflags-y += -DMTK_WCN_SOC_CHIP_SUPPORT=1
+ subdir-ccflags-y += -DMTK_WCN_WLAN_GEN2
+ # wmt_detect.c shares declarations with the drv_init sibling directory.
+ subdir-ccflags-y += -I$(src)/drv_init/inc
+--- a/connectivity-modules/connectivity/common/common_main/mt6735/mtk_wcn_consys_hw.c
++++ b/connectivity-modules/connectivity/common/common_main/mt6735/mtk_wcn_consys_hw.c
+@@ -370,7 +370,7 @@
+ 		hwPowerOn(MT6328_POWER_LDO_VCN18, VOL_1800, "wcn_drv");
+ #else
+ 		if (reg_VCN18) {
+-			regulator_set_voltage(reg_VCN18, VOL_1800, VOL_1800);
++			regulator_set_voltage(reg_VCN18, 1800000, 1800000);
+ 			if (regulator_enable(reg_VCN18))
+ 				WMT_PLAT_ERR_FUNC("enable VCN18 fail\n");
+ 			else
+@@ -399,7 +399,7 @@
+ 			hwPowerOn(MT6328_POWER_LDO_VCN28, VOL_2800, "wcn_drv");
+ #else
+ 			if (reg_VCN28) {
+-				regulator_set_voltage(reg_VCN28, VOL_2800, VOL_2800);
++				regulator_set_voltage(reg_VCN28, 2800000, 2800000);
+ 				if (regulator_enable(reg_VCN28))
+ 					WMT_PLAT_ERR_FUNC("enable VCN_2V8 fail!\n");
+ 				else
+--- a/connectivity-modules/connectivity/common/common_main/mt6735/wmt_plat_alps.c
++++ b/connectivity-modules/connectivity/common/common_main/mt6735/wmt_plat_alps.c
+@@ -314,6 +314,9 @@
+ 	return gCoClockFlag;
+ }
+ 
++static int co_clock_override = -1;
++module_param(co_clock_override, int, 0444);
++
+ static UINT32 wmt_plat_soc_co_clock_flag_set(UINT32 flag)
+ {
+ 	gCoClockFlag = flag;
+@@ -326,6 +329,9 @@
+ 	INT32 iret;
+ 	/*init wmt function ctrl wakelock if wake lock is supported by host platform */
+ 
++ if (co_clock_override == 0 || co_clock_override == 1)
++  co_clock_type = co_clock_override;
++ WMT_PLAT_WARN_FUNC("CONSYS clock mode=%u\n", co_clock_type);
+ 	wmt_plat_soc_co_clock_flag_set(co_clock_type);
+ 
+ 	stub_cb.aif_ctrl_cb = wmt_plat_audio_ctrl;

@@ -144,10 +144,9 @@ static void lcm_get_params(LCM_PARAMS *params)
 	params->dsi.PLL_CLOCK = 90;
 }
 
-static void lcm_init(void)
-{
 #ifndef BUILD_LK
-	st7796s_spi_lock();
+void st7796s_panel_init_locked(void)
+{
 	st7796s_spi_prepare();
 	st7796s_spi_reset(1);
 	MDELAY(1);
@@ -155,6 +154,19 @@ static void lcm_init(void)
 	MDELAY(50);
 	st7796s_spi_reset(1);
 	MDELAY(120);
+	push_table(lcm_initialization_setting,
+		   sizeof(lcm_initialization_setting) /
+		   sizeof(struct LCM_setting_table), 1);
+	st7796s_spi_enable();
+}
+#endif
+
+static void lcm_init(void)
+{
+#ifndef BUILD_LK
+	st7796s_spi_lock();
+	st7796s_panel_init_locked();
+	st7796s_spi_unlock();
 #else
 	SET_RESET_PIN(1);
 	MDELAY(1);
@@ -162,22 +174,11 @@ static void lcm_init(void)
 	MDELAY(50);
 	SET_RESET_PIN(1);
 	MDELAY(120);
-#endif
 	push_table(lcm_initialization_setting,
 		   sizeof(lcm_initialization_setting) /
 		   sizeof(struct LCM_setting_table), 1);
-#ifndef BUILD_LK
-	st7796s_spi_enable();
-	st7796s_spi_unlock();
 #endif
 }
-
-#ifndef BUILD_LK
-void st7796s_panel_init(void)
-{
-	lcm_init();
-}
-#endif
 
 static void lcm_suspend(void)
 {

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import struct
 import sys
@@ -72,7 +73,7 @@ class BootImg:
         return split_gz(self.kernel)
 
     def build(self, kernel=None, ramdisk=None, second=None, dtb=None,
-              tail=None, total_size=None):
+              tail=None):
         kernel = self.kernel if kernel is None else kernel
         ramdisk = self.ramdisk if ramdisk is None else ramdisk
         second = self.second if second is None else second
@@ -106,12 +107,6 @@ class BootImg:
         out += pad(dtb)
         out += tail
 
-        if total_size is not None:
-            if len(out) < total_size:
-                out += b"\x00" * (total_size - len(out))
-            elif len(out) > total_size:
-                raise ValueError("新镜像 %d 字节超过分区大小 %d，无法放入"
-                                 % (len(out), total_size))
         return bytes(out)
 
 
@@ -122,6 +117,8 @@ def split_gz(blob):
     try:
         d.decompress(blob)
     except zlib.error:
+        return blob, b""
+    if not d.eof:
         return blob, b""
     used = len(blob) - len(d.unused_data)
     return blob[:used], blob[used:]
@@ -147,22 +144,23 @@ def dtb_has_emmc(dtb):
     return dtb.count(b"okay") >= dtb.count(b"disabled")
 
 
-USAGE = """usage: replace_kernel [--dry-run] [--recovery-dtb] [--out DIR]"""
-
-
 def main():
-    argv = sys.argv[1:]
-    dry = "--dry-run" in argv
-    force_rec_dtb = "--recovery-dtb" in argv
-    out_dir = None
-    if "--out" in argv:
-        i = argv.index("--out")
-        if i + 1 < len(argv):
-            out_dir = argv[i + 1]
-
-    if "-h" in argv or "--help" in argv:
-        print(USAGE)
-        return 0
+    parser = argparse.ArgumentParser(description="重打包 Android boot 和 recovery 镜像")
+    parser.add_argument("--dry-run", action="store_true", help="只检查，不写文件")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--recovery-dtb", dest="replace_recovery_dtb", action="store_true",
+                      help="替换 Recovery 追加 DTB（默认）")
+    mode.add_argument("--keep-recovery-dtb", dest="replace_recovery_dtb", action="store_false",
+                      help="保留 Recovery 原追加 DTB")
+    parser.set_defaults(replace_recovery_dtb=True)
+    parser.add_argument("--recovery-partition-size", type=lambda value: int(value, 0),
+                        metavar="BYTES", help="按实测分区容量（字节）检查，不补零")
+    parser.add_argument("--out", metavar="DIR", help="输出目录；省略则替换 Images 中的镜像")
+    args = parser.parse_args()
+    capacity = args.recovery_partition_size
+    if capacity is not None and capacity <= 0:
+        parser.error("Recovery 分区容量必须大于 0")
+    out_dir = args.out
 
     missing = []
     for p in (BOOT_IMG, REC_IMG, NEW_IMAGE_GZ, NEW_IMAGE_GZ_DTB):
@@ -192,7 +190,7 @@ def main():
     print("   gzip 部分 : %d 字节  sha1=%s" % (len(gz_part), hashlib.sha1(gz_part).hexdigest()[:16]))
     print("   DTB  部分 : %d 字节  sha1=%s" % (len(dtb_part), hashlib.sha1(dtb_part).hexdigest()[:16]))
     if dtb_part[:4] != DT_MAGIC:
-        print(c(" 警告: 追加数据不是合法 DTB (magic=%s)" % dtb_part[:4].hex(), "y"))
+        parser.error("Image.gz-dtb 缺少可识别的追加 DTB (magic=%s)" % dtb_part[:4].hex())
     print("=" * 66)
 
     boot = BootImg(BOOT_IMG)
@@ -225,31 +223,34 @@ def main():
     ri = dtb_summary(r_dtb)
     print("  原DTB: lcm_ops=%s" % (ri.get("lcm_ops") or "无"))
 
-    if force_rec_dtb:
-        print(c("  操作: --recovery-dtb 已指定 → 内核和 DTB 都替换", "y"))
-        new_rec_kernel = new_gz_dtb
-        note_dtb = "已替换为 mt6735m_yuxin.dtb"
+    if args.replace_recovery_dtb:
+        print("  操作: 内核和追加 DTB 一起替换")
+        expected_dtb = dtb_part
     else:
-        print("  操作: 只替换 gzip 内核，保留原 DTB")
-        print(c("        (原DTB含 msdc=okay + 板级 lcm/kpd/regulator，TWRP 依赖它)", "d"))
-        print(c("        如需强制替换 DTB，加 --recovery-dtb", "d"))
-        new_rec_kernel = new_gz + r_dtb
-        note_dtb = "保留原 DTB"
+        print("  操作: --keep-recovery-dtb，保留原追加 DTB")
+        expected_dtb = r_dtb
 
-    new_rec = rec.build(kernel=new_rec_kernel, total_size=rec.total_size)
+    new_rec = rec.build(kernel=gz_part + expected_dtb)
+    if capacity is None:
+        print("  未指定 Recovery 分区容量，刷写前请确认实际分区容量")
+    else:
+        print("  Recovery 分区容量: %d 字节" % capacity)
+        if len(new_rec) > capacity:
+            parser.error("新 Recovery 镜像 %d 字节超过分区容量 %d 字节"
+                         % (len(new_rec), capacity))
     chk2 = BootImg.__new__(BootImg)
     chk2.raw = new_rec
     chk2.path = "<new recovery>"
     chk2._parse()
     n_gz, n_dtb = split_gz(chk2.kernel)
-    print("  新镜像: kernel=%d (gz %d + dtb %d)  ramdisk=%d  总计=%d (%s)"
+    print("  新镜像: kernel=%d (gz %d + dtb %d)  ramdisk=%d  总计=%d"
           % (chk2.kernel_size, len(n_gz), len(n_dtb), chk2.ramdisk_size,
-             len(new_rec), note_dtb))
+             len(new_rec)))
     assert chk2.ramdisk == rec.ramdisk, "recovery ramdisk 变化了！"
-    assert n_gz == new_gz, "recovery gzip 内核写入校验失败"
-    assert len(new_rec) == rec.total_size, "recovery 总大小必须保持 %d" % rec.total_size
+    assert n_gz == gz_part, "recovery gzip 内核写入校验失败"
+    assert n_dtb == expected_dtb, "recovery DTB 写入校验失败"
 
-    if dry:
+    if args.dry_run:
         print(c("\n--dry-run: 未写入任何文件", "y"))
         return 0
 

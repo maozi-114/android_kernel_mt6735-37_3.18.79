@@ -1287,6 +1287,49 @@ unsigned int disp_sync_query_buf_info(unsigned int session_id, unsigned int time
 	return 0;
 }
 
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+int disp_sync_read_wdma_buffer(unsigned int session_id, unsigned int idx,
+			     unsigned long addr, unsigned int pitch, unsigned int red,
+			     void (*submit)(const void *, unsigned int, unsigned int))
+{
+	disp_sync_info *layer = _get_sync_info(session_id, disp_sync_get_output_timeline_id());
+	struct mtkfb_fence_buf_info *buf;
+	unsigned int size = pitch * 320;
+	int ret = -ENOENT;
+
+	if (!layer || !ion_client)
+		return ret;
+
+	mutex_lock(&layer->sync_lock);
+	list_for_each_entry(buf, &layer->buf_list, list) {
+		struct ion_sys_data sync = {0};
+		void *va;
+
+		if (buf->idx != idx || buf->mva != addr || !buf->hnd || buf->size < size)
+			continue;
+		va = ion_map_kernel(ion_client, buf->hnd);
+		if (IS_ERR_OR_NULL(va)) {
+			ret = va ? PTR_ERR(va) : -ENOMEM;
+			break;
+		}
+		sync.sys_cmd = ION_SYS_CACHE_SYNC;
+		sync.cache_sync_param.kernel_handle = buf->hnd;
+		sync.cache_sync_param.va = va;
+		sync.cache_sync_param.size = size;
+		sync.cache_sync_param.sync_type = ION_CACHE_INVALID_BY_RANGE_USE_VA;
+		ret = ion_kernel_ioctl(ion_client, ION_CMD_SYSTEM, (unsigned long)&sync);
+		if (!ret) {
+			dma_rmb();
+			submit(va, pitch, red);
+		}
+		ion_unmap_kernel(ion_client, buf->hnd);
+		break;
+	}
+	mutex_unlock(&layer->sync_lock);
+	return ret;
+}
+#endif
+
 int disp_sync_get_debug_info(char *stringbuf, int buf_len)
 {
 	int len = 0;

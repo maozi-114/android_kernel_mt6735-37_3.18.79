@@ -10,6 +10,11 @@ menuconfig MTK_FB
 	  If you want to use MediaTek(R) frame buffer diver, say Y here.
 	  If unsure, say N.
 
+config MTK_YUXIN_SPI_COMPOSITION
+	bool "Feed MT6735M display composition to the yuxin SPI panel"
+	depends on MTK_FB && MTK_LCM && MTK_CMDQ && ARCH_MT6735M
+	depends on CUSTOM_KERNEL_LCM = "st7796s_hvga_dsi_cmd"
+
 config MTK_VIDEOX
 	bool CONFIG_MTK_VIDEOX
 	default n
