@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.yuxin.overlay.duraspeed" android:versionCode="1">
+    <uses-sdk android:minSdkVersion="27" android:targetSdkVersion="27" />
+    <overlay android:targetPackage="com.mediatek.duraspeed"
+        android:isStatic="true" android:priority="1" />
+    <application android:hasCode="false" />
+</manifest>

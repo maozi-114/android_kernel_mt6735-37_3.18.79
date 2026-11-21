@@ -81,6 +81,9 @@
 #include "mt_smi.h"
 #include <mach/mt_freqhopping.h>
 #include "ddp_gamma.h"
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+#include "../../lcm/st7796s_hvga_dsi_cmd/st7796s_spi.h"
+#endif
 
 typedef void (*fence_release_callback) (unsigned int data);
 unsigned int is_hwc_enabled = 0;
@@ -106,6 +109,9 @@ static disp_internal_buffer_info *freeze_buffer_info;
 static RDMA_CONFIG_STRUCT decouple_rdma_config;
 static WDMA_CONFIG_STRUCT decouple_wdma_config;
 static disp_mem_output_config mem_config;
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+static bool yuxin_composition;
+#endif
 
 static unsigned int primary_session_id = MAKE_DISP_SESSION(DISP_SESSION_PRIMARY, 0);
 unsigned int ext_session_id = MAKE_DISP_SESSION(DISP_SESSION_MEMORY, 2);
@@ -564,7 +570,11 @@ int primary_display_save_power_for_idle(int enter, unsigned int need_primary_loc
 		; /* already implemented. */
 
 	/* no need idle lock, cause primary lock will be used inside switch_mode */
-	if (disp_low_power_remove_ovl == 1) {
+	if (disp_low_power_remove_ovl == 1
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+	    && !yuxin_composition
+#endif
+	   ) {
 		if (primary_display_is_video_mode() == 1) {/* only for video mode */
 			/* DISPMSG("[LP] OVL pgc->session_mode=%d, enter=%d\n", pgc->session_mode, enter); */
 			if (enter) {
@@ -3072,14 +3082,23 @@ int _trigger_display_interface(int blocking, void *callback, unsigned int userda
 	return 0;
 }
 
-int _trigger_ovl_to_memory(disp_path_handle disp_handle, cmdqRecHandle cmdq_handle,
-			   fence_release_callback callback, unsigned int data, int blocking)
+static int _trigger_ovl_to_memory_frame(disp_path_handle disp_handle, cmdqRecHandle cmdq_handle,
+					fence_release_callback callback, unsigned int data,
+					int blocking, bool fresh_eof)
 {
 	unsigned int rdma_pitch_sec;
+	int ret;
 
 	dpmgr_wdma_path_force_power_on();
+	if (fresh_eof) {
+		ret = cmdqRecClearEventToken(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+		if (ret)
+			goto reset;
+	}
 	dpmgr_path_trigger(disp_handle, cmdq_handle, CMDQ_ENABLE);
-	cmdqRecWaitNoClear(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+	ret = cmdqRecWaitNoClear(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+	if (ret)
+		goto reset;
 
 	cmdqRecBackupUpdateSlot(cmdq_handle, pgc->rdma_buff_info, 0, mem_config.addr);
 	/* rdma pitch only use bit[15..0], we use bit[31:30] to store secure information */
@@ -3088,25 +3107,39 @@ int _trigger_ovl_to_memory(disp_path_handle disp_handle, cmdqRecHandle cmdq_hand
 	cmdqRecBackupUpdateSlot(cmdq_handle, pgc->rdma_buff_info, 2, mem_config.fmt);
 
 	if (blocking)
-		cmdqRecFlush(cmdq_handle);
+		ret = cmdqRecFlush(cmdq_handle);
 	else
-		cmdqRecFlushAsyncCallback(cmdq_handle, (CmdqAsyncFlushCB) callback, data);
+		ret = cmdqRecFlushAsyncCallback(cmdq_handle, (CmdqAsyncFlushCB) callback, data);
+reset:
 	cmdqRecReset(cmdq_handle);
 	cmdqRecWait(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
 	MMProfileLogEx(ddp_mmp_get_events()->ovl_trigger, MMProfileFlagPulse, 0, data);
-	return 0;
+	return ret;
+}
+
+static int _trigger_ovl_to_memory(disp_path_handle disp_handle, cmdqRecHandle cmdq_handle,
+				  fence_release_callback callback, unsigned int data, int blocking)
+{
+	return _trigger_ovl_to_memory_frame(disp_handle, cmdq_handle, callback, data, blocking, false);
 }
 
 int _trigger_ovl_to_memory_mirror(disp_path_handle disp_handle, cmdqRecHandle cmdq_handle,
-				  fence_release_callback callback, unsigned int data)
+				  fence_release_callback callback, unsigned int data, bool blocking)
 {
-	int layer = 0;
+	int layer = 0, ret;
 	unsigned int rdma_pitch_sec;
 
 	dpmgr_wdma_path_force_power_on();
+	if (blocking) {
+		ret = cmdqRecClearEventToken(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+		if (ret)
+			goto reset;
+	}
 	dpmgr_path_trigger(disp_handle, cmdq_handle, CMDQ_ENABLE);
 
-	cmdqRecWaitNoClear(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+	ret = cmdqRecWaitNoClear(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
+	if (ret)
+		goto reset;
 
 	layer = disp_sync_get_output_timeline_id();
 	cmdqRecBackupUpdateSlot(cmdq_handle, pgc->cur_config_fence, layer, mem_config.buff_idx);
@@ -3122,12 +3155,16 @@ int _trigger_ovl_to_memory_mirror(disp_path_handle disp_handle, cmdqRecHandle cm
 
 	cmdqRecBackupUpdateSlot(cmdq_handle, pgc->rdma_buff_info, 2, mem_config.fmt);
 
-	cmdqRecFlushAsyncCallback(cmdq_handle, (CmdqAsyncFlushCB) callback, data);
+	if (blocking)
+		ret = cmdqRecFlush(cmdq_handle);
+	else
+		ret = cmdqRecFlushAsyncCallback(cmdq_handle, (CmdqAsyncFlushCB) callback, data);
+reset:
 	cmdqRecReset(cmdq_handle);
 	cmdqRecWait(cmdq_handle, CMDQ_EVENT_DISP_WDMA0_EOF);
 	MMProfileLogEx(ddp_mmp_get_events()->ovl_trigger, MMProfileFlagPulse, 0, data);
 
-	return 0;
+	return ret;
 }
 
 #define EEEEEEEEEEEEEEE
@@ -4479,7 +4516,65 @@ static int _ovl_ext_fence_release_callback(uint32_t userdata)
 	return ret;
 }
 
-static int _ovl_fence_release_callback(uint32_t userdata)
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+static bool yuxin_spi_panel_active(void)
+{
+	return pgc->state == DISP_ALIVE && pgc->plcm && pgc->plcm->drv &&
+	       !strcmp(pgc->plcm->drv->name, "st7796s_hvga_dsi_cmd") &&
+	       primary_display_get_width() == 240 && primary_display_get_height() == 320 &&
+	       primary_display_cmdq_enabled() && primary_display_is_video_mode();
+}
+
+static void yuxin_submit_composition(unsigned int index, const disp_mem_output_config *output)
+{
+	disp_internal_buffer_info *buf;
+
+	if (pgc->state != DISP_ALIVE || index >= DISP_INTERNAL_BUFFER_COUNT ||
+	    output->security != DISP_NORMAL_BUFFER || output->fmt != eRGB888 ||
+	    output->pitch != 240 * 3)
+		return;
+
+	buf = decouple_buffer_info[index];
+	if (!buf || IS_ERR_OR_NULL(buf->va) || buf->mva != output->addr ||
+	    buf->size < (size_t)output->pitch * 320) {
+		pr_warn_ratelimited("st7796s-spi: invalid WDMA buffer %u\n", index);
+		return;
+	}
+
+	dma_rmb();
+	st7796s_spi_submit_rgb888(buf->va, output->pitch);
+}
+
+static void yuxin_submit_mirror(const disp_mem_output_config *output)
+{
+	unsigned int red;
+	int ret;
+
+	if (output->fmt == eRGBA8888)
+		red = 0;
+	else if (output->fmt == eBGRA8888)
+		red = 2;
+	else {
+		pr_warn_ratelimited("st7796s-spi: unsupported mirror format %#x\n", output->fmt);
+		return;
+	}
+
+	if (output->x || output->y || output->w != 240 || output->h != 320 ||
+	    output->pitch < 240 * 4 || output->pitch > 0xffff ||
+	    !output->addr || !output->buff_idx)
+		return;
+
+	ret = disp_sync_read_wdma_buffer(primary_session_id, output->buff_idx,
+					output->addr, output->pitch, red,
+					st7796s_spi_submit_x8888);
+	if (ret)
+		pr_warn_ratelimited("st7796s-spi: mirror buffer unavailable: %d\n", ret);
+	else
+		pr_info_once("st7796s-spi: received first mirror WDMA composition\n");
+}
+#endif
+
+static int _ovl_fence_release(uint32_t userdata, bool path_locked)
 {
 	int i = 0;
 	unsigned int addr = 0;
@@ -4579,7 +4674,7 @@ static int _ovl_fence_release_callback(uint32_t userdata)
 		if (ret == 0) {
 			cmdqBackupReadSlot(pgc->rdma_buff_info, 1, &(rdma_pitch_sec));
 			rdma_pitch_sec = rdma_pitch_sec >> 30;
-			if (rdma_pitch_sec == DISP_NORMAL_BUFFER)
+			if (rdma_pitch_sec == DISP_NORMAL_BUFFER && !path_locked)
 				_primary_path_lock(__func__);
 			cmdqRecReset(cmdq_handle);
 			_cmdq_insert_wait_frame_done_token_mira(cmdq_handle);
@@ -4595,7 +4690,7 @@ static int _ovl_fence_release_callback(uint32_t userdata)
 			cmdqBackupReadSlot(pgc->rdma_buff_info, 2, &(rdma_fmt));
 			decouple_rdma_config.inputFormat = rdma_fmt;
 
-			if (rdma_pitch_sec == DISP_NORMAL_BUFFER)
+			if (rdma_pitch_sec == DISP_NORMAL_BUFFER && !path_locked)
 				_primary_path_unlock(__func__);
 			MMProfileLogEx(ddp_mmp_get_events()->primary_rdma_config,
 				       MMProfileFlagPulse, 0, decouple_rdma_config.address);
@@ -4608,6 +4703,11 @@ static int _ovl_fence_release_callback(uint32_t userdata)
 #endif
 
 	return ret;
+}
+
+static int _ovl_fence_release_callback(uint32_t userdata)
+{
+	return _ovl_fence_release(userdata, false);
 }
 
 static int decouple_fence_release_kthread(void *data)
@@ -6261,6 +6361,24 @@ static int primary_display_merge_session_cmd(disp_session_config *config)
 	if (DISP_OUTPUT_UNKNOWN == output_type)
 		output_type = DISP_OUTPUT_DECOUPLE;
 
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+	if (!yuxin_composition && config->type == DISP_SESSION_PRIMARY &&
+	    output_type == DISP_OUTPUT_DECOUPLE && yuxin_spi_panel_active() &&
+	    DISP_INTERNAL_BUFFER_COUNT == 3 && pgc->dc_buf[0] &&
+	    pgc->dc_buf[1] && pgc->dc_buf[2] &&
+	    !primary_display_is_secure_path(DISP_SESSION_PRIMARY)) {
+#ifdef MTK_DISP_IDLE_LP
+		_disp_primary_path_exit_idle(__func__, 0);
+#endif
+		if (pgc->session_mode == DISP_SESSION_DIRECT_LINK_MODE &&
+		    !_DL_switch_to_DC_fast())
+			pgc->session_mode = DISP_SESSION_DECOUPLE_MODE;
+		if (pgc->session_mode == DISP_SESSION_DECOUPLE_MODE) {
+			yuxin_composition = true;
+			pr_info("st7796s-spi: using primary display decouple mode\n");
+		}
+	}
+#endif
 	pgc->dc_type = output_type;
 
 #ifdef CONFIG_ALL_IN_TRIGGER_STAGE
@@ -6374,13 +6492,34 @@ static int _primary_display_trigger(int blocking, void *callback, unsigned int u
 					&cached_session_output[DISP_SESSION_PRIMARY - 1], 0);
 			DISPPR_ERROR("There is no output config when decouple mirror!!\n");
 		}
-		is_output_buffer_set = 0;
-		pgc->need_trigger_dcMirror_out = 0;
-		_trigger_ovl_to_memory_mirror(pgc->ovl2mem_path_handle,
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+		if (yuxin_spi_panel_active() && pgc->need_trigger_dcMirror_out &&
+		    mem_config.security == DISP_NORMAL_BUFFER &&
+		    !primary_display_is_secure_path(DISP_SESSION_PRIMARY)) {
+			disp_mem_output_config output = mem_config;
+
+			is_output_buffer_set = 0;
+			pgc->need_trigger_dcMirror_out = 0;
+			ret = _trigger_ovl_to_memory_mirror(pgc->ovl2mem_path_handle,
+							   pgc->cmdq_handle_ovl1to2_config,
+							   NULL, DISP_SESSION_DECOUPLE_MIRROR_MODE, true);
+			if (!ret) {
+				yuxin_submit_mirror(&output);
+				_olv_wdma_fence_release_callback(DISP_SESSION_DECOUPLE_MIRROR_MODE);
+			} else {
+				pr_warn_ratelimited("st7796s-spi: mirror WDMA frame failed: %d\n", ret);
+			}
+		} else
+#endif
+		{
+			is_output_buffer_set = 0;
+			pgc->need_trigger_dcMirror_out = 0;
+			_trigger_ovl_to_memory_mirror(pgc->ovl2mem_path_handle,
 					      pgc->cmdq_handle_ovl1to2_config,
 					      (fence_release_callback)
 					      _olv_wdma_fence_release_callback,
-					      DISP_SESSION_DECOUPLE_MIRROR_MODE);
+					      DISP_SESSION_DECOUPLE_MIRROR_MODE, false);
+		}
 	} else if (pgc->session_mode == DISP_SESSION_DECOUPLE_MODE) {
 		if (pgc->dc_type == DISP_OUTPUT_DECOUPLE) {
 			uint32_t writing_mva = 0;
@@ -6414,6 +6553,24 @@ static int _primary_display_trigger(int blocking, void *callback, unsigned int u
 			 * Need to set data as DISP_SESSION_DECOUPLE_MULTIPASS_MODE to _ovl_fence_release_callback.
 			 * Then the multipass output buffer fence would be release in _ovl_fence_release_callback.
 			 */
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+			if (yuxin_composition && mem_config.security == DISP_NORMAL_BUFFER) {
+				unsigned int index = pgc->dc_buf_id;
+				disp_mem_output_config output = mem_config;
+				unsigned int data = is_multipass_trigger ? 5 : DISP_SESSION_DECOUPLE_MODE;
+
+				is_multipass_trigger = 0;
+				ret = _trigger_ovl_to_memory_frame(pgc->ovl2mem_path_handle,
+								   pgc->cmdq_handle_ovl1to2_config,
+								   NULL, data, 1, true);
+				if (!ret) {
+					yuxin_submit_composition(index, &output);
+					_ovl_fence_release(data, true);
+				} else {
+					pr_warn_ratelimited("st7796s-spi: WDMA frame failed: %d\n", ret);
+				}
+			} else
+#endif
 			if (is_multipass_trigger) {
 				_trigger_ovl_to_memory(pgc->ovl2mem_path_handle, pgc->cmdq_handle_ovl1to2_config,
 						       (fence_release_callback)_ovl_fence_release_callback, 5, 0);
@@ -7233,6 +7390,14 @@ int primary_display_switch_mode(int sess_mode, unsigned int session, int force)
 	if (primary_get_state() == DISP_FREEZE || primary_get_state() == DISP_BLANK)
 		sess_mode = DISP_SESSION_DECOUPLE_MODE;
 
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+	if (yuxin_composition) {
+		if (sess_mode == DISP_SESSION_DIRECT_LINK_MODE)
+			sess_mode = DISP_SESSION_DECOUPLE_MODE;
+		else if (sess_mode == DISP_SESSION_DIRECT_LINK_MIRROR_MODE)
+			sess_mode = DISP_SESSION_DECOUPLE_MIRROR_MODE;
+	}
+#endif
 	if (pgc->session_mode == sess_mode)
 		goto done;
 

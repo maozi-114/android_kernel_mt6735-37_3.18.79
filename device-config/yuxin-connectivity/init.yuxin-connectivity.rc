@@ -1,0 +1,27 @@
+on post-fs-data
+    insmod /vendor/lib/modules/yuxin-connectivity/wmt_drv.ko co_clock_override=0
+    insmod /vendor/lib/modules/yuxin-connectivity/mtk_stp_bt_soc.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/stp_chrdev_gps.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/gps.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/gps_emi.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/mtk_fm_drv.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/wmt_chrdev_wifi.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/wlan_gen2.ko
+    insmod /vendor/lib/modules/yuxin-connectivity/mtk_wmt_detect.ko
+    start yuxin_wmt_loader
+
+on property:service.wcn.driver.ready=yes
+    start yuxin_wmt_launcher
+
+service yuxin_wmt_loader /vendor/bin/wmt_loader
+    class core
+    disabled
+    user root
+    group root
+    oneshot
+
+service yuxin_wmt_launcher /vendor/bin/wmt_launcher -p /vendor/firmware/
+    class core
+    disabled
+    user system
+    group system

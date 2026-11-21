@@ -199,6 +199,11 @@ int disp_sync_find_fence_idx_by_addr(unsigned int session_id, unsigned int timel
 unsigned int disp_sync_query_buf_info(unsigned int session_id, unsigned int timeline_id,
 				      unsigned int idx, unsigned long *mva,
 				      unsigned int *size);
+#ifdef CONFIG_MTK_YUXIN_SPI_COMPOSITION
+int disp_sync_read_wdma_buffer(unsigned int session_id, unsigned int idx,
+			     unsigned long addr, unsigned int pitch, unsigned int red,
+			     void (*submit)(const void *, unsigned int, unsigned int));
+#endif
 int disp_sync_get_debug_info(char *stringbuf, int buf_len);
 int disp_sync_get_ovl_timeline_id(int layer_id);
 int disp_sync_get_output_timeline_id(void);

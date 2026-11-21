@@ -1092,6 +1092,14 @@ LCM_DRIVER *lcm_driver_list[] = {
 };
 
 unsigned char lcm_name_list[][128] = {
+#if defined(ST7796S_HVGA_DSI_CMD)
+        "st7796s_hvga_dsi_cmd",
+#endif
+
+#if defined(NV3049F_28)
+        "nv3049f_28",
+#endif
+
 #if defined(HX8392A_DSI_CMD)
 	"hx8392a_dsi_cmd",
 #endif
